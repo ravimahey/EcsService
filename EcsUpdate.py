@@ -2,114 +2,92 @@ import json
 import os
 import boto3
 
-# hello world
-def response_object(status, message):
+# Constants
+SUCCESS_STATUS_CODE = 200
+ERROR_STATUS_CODE = 500
+
+# AWS ECS Client
+def get_ecs_client():
+    region = os.environ.get("AWS_REGION")
+    return boto3.client("ecs", region_name=region)
+
+# Response helpers
+def create_response(status, message):
     return {"statusCode": status, "body": json.dumps({"message": message})}
 
-def response(status, message):
-    if status == 200:
-        return response_object(status, message)
-    else:
-        return response_object(status, message)
+def success_response(message):
+    return create_response(SUCCESS_STATUS_CODE, message)
 
-def get_client():
-    region = os.environ.get("AWS_REGION")
-    print(region)
-    ecs = boto3.client(
-        "ecs",
-        region_name=region,
-    )
-    return ecs
+def error_response(message):
+    return create_response(ERROR_STATUS_CODE, message)
 
+# ECS Functions
 def contains_prod(arn):
     return "prod" in arn.lower()
 
 def remove_prod_arns(arn_list):
-    new_arn_list = [arn for arn in arn_list if not contains_prod(arn)]
-    return new_arn_list
+    return [arn for arn in arn_list if not contains_prod(arn)]
 
-def get_arn_by_environment_tag(arn_list, environment):
-    new_arn_list = set()
-    for arn in arn_list:
-        if environment in arn:
-            new_arn_list.add(arn)
-    return new_arn_list
-    
-def get_all_clusters_arn():
-    ecs = get_client()
+def get_all_clusters_arns():
     try:
-        cluster = ecs.list_clusters()
-        clusters_arns = cluster["clusterArns"]
-        return remove_prod_arns(clusters_arns)
+        ecs = get_ecs_client()
+        response = ecs.list_clusters()
+        return remove_prod_arns(response["clusterArns"])
     except Exception as e:
         print(e)
-        return response(500, str(e))
-    
-def get_all_services_arn(cluster):
-    ecs = get_client()
+        return error_response(str(e))
+
+def get_all_services_arns(cluster):
     try:
+        ecs = get_ecs_client()
         response = ecs.list_services(cluster=cluster)
-        services = response["serviceArns"]
-        return services
+        return response["serviceArns"]
     except Exception as e:
         print(e)
-        return response(500, str(e))
-    
+        return error_response(str(e))
+
 def update_ecs_service(desired_task, cluster, service):
     if "prod" in cluster.lower():
         raise Exception("Operation on production clusters is restricted")
-    print("Updating ECS Service")
-    # Create ECS client
-    ecs = get_client()
-    # Update service with desired task count
-    updated = ecs.update_service(
-        cluster=cluster, service=service, desiredCount=int(desired_task)
-    )
-    print("Service updated successfully:", {"cluster":cluster, "service": service})
-def request_object(event):
+    ecs = get_ecs_client()
+    ecs.update_service(cluster=cluster, service=service, desiredCount=int(desired_task))
+    print("Service updated successfully:", {"cluster": cluster, "service": service})
+
+# Request processing functions
+def parse_request_body(event):
     try:
         body = json.loads(event["body"])
         return body
     except:
         return event
-def get_deisred_tasks(body):
-    return body['desired_tasks']
-def extract_clusters(body):
-    clusters = body["cluster_names"].split(',')
-    return clusters
-def get_environment(body):
-    env = body['environment'].split(',')
-    return env
 
+def extract_clusters(body):
+    return body["cluster_names"].split(',')
+
+def extract_environments(body):
+    return body['environment'].split(',')
+
+def extract_desired_tasks(body):
+    return body['desired_tasks']
+
+# Lambda Handler
 def lambda_handler(event, context):
     try:
-        body = request_object(event)
-        environments = get_environment(body)
+        body = parse_request_body(event)
+        environments = extract_environments(body)
         cluster_names = extract_clusters(body)
-        desired_tasks = get_deisred_tasks(body)            
-                
-        cluster_arns = get_all_clusters_arn()
+        desired_tasks = extract_desired_tasks(body)
+        
+        cluster_arns = get_all_clusters_arns()
 
         for cluster_name in cluster_names:
-            if cluster_name == "all":
-                for cluster_arn in cluster_arns:
-                    if "dev" in environments and "dev" in cluster_arn:
-                        services_arns = get_all_services_arn(cluster_arn)
-                        for service_arn in services_arns:
-                            update_ecs_service(desired_task=desired_tasks,cluster=cluster_arn,service=service_arn)
-                    elif "stage" in environments and "stage" in cluster_arn:
-                        services_arns = get_all_services_arn(cluster_arn)
-                        for service_arn in services_arns:
-                            update_ecs_service(desired_task=desired_tasks,cluster=cluster_arn,service=service_arn)
-            else:
-                for cluster_arn in cluster_arns:
-                    if cluster_name in cluster_arn and (("dev" in environments and "dev" in cluster_arn) or ('stage' in environments and 'stage' in cluster_arn) ):
-                        service_arns = get_all_services_arn(cluster=cluster_arn)
-                        for service_arn in service_arns:
-                            update_ecs_service(desired_task=desired_tasks,cluster=cluster_arn,service=service_arn)         
-        return response(200, "Successfully Update your ECS clusters")
+            for cluster_arn in cluster_arns:
+                if (cluster_name == "all" or cluster_name in cluster_arn) and any(env in cluster_arn for env in environments):
+                    service_arns = get_all_services_arns(cluster=cluster_arn)
+                    for service_arn in service_arns:
+                        update_ecs_service(desired_task=desired_tasks, cluster=cluster_arn, service=service_arn)
+        
+        return success_response("Successfully updated your ECS clusters")
     except Exception as e:
         print(e)
-        return response(500, str(e))
-
-
+        return error_response(str(e))
