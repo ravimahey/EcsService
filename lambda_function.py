@@ -12,8 +12,8 @@ def lambda_handler(event, context):
             response = lambda_handler_ecs.handle_request(
                 operation=Operations.GET_STATUS
             )
-            print("Cluster_status: ", response )
-            return response
+            print("Cluster_status: ", response)
+            return build_response(200, response)
         # Handle GET request
         elif http_method == 'POST':
             print("_______________________post request________________________")
@@ -21,11 +21,11 @@ def lambda_handler(event, context):
                 operation=Operations.UPDATE_SERVICE
             )
             # Handle POST request
-            return request
+            return build_response(200, "Services updated successfully!")
         else:
             # Handle other HTTP methods
             return build_response(405, 'Unsupported HTTP method')
     else:
         # Handle case where HTTP method is not provided
         return build_response(400, 'No HTTP method provided')
-    
+

@@ -72,6 +72,7 @@ class ECSManager:
                     running=running_count,
                     pending=pending_count
                 ))
+                print("serivce name: ",service_name,", running: ",running_count,", pending: ",pending_count)
         return cluster_status
 
     @staticmethod
