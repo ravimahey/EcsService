@@ -1,4 +1,4 @@
-# ECS Infrastructure Scaling Utility
+# ECS Infrastructure Scaling using Lambda function
 
 This Python utility is designed to upscale or downscale ECS (Amazon Elastic Container Service) services, providing functionality to manage containerized applications efficiently. It utilizes Boto3, the AWS SDK for Python, along with AWS Lambda functions.
 
