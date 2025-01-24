@@ -1,0 +1,16 @@
+{
+    "Effect": "Allow",
+    "Action": [
+        "ecs:ListServices",
+        "ecs:ListTasks",
+        "ecs:ListContainerInstances",
+        "ecs:ListTaskDefinitions",
+        "ecs:ListClusters",
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:DescribeTasks",
+        "ecs:UpdateService"
+    ],
+    "Resource": "*"
+}
